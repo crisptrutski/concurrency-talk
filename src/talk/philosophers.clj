@@ -13,29 +13,23 @@
           :status :sleeping
           :forks (sorted-set)})))
 
-;; Used for side effects in transactions
-(def a (agent nil))
-
 (defn roll-10? [max] (< (rand-int 10) max))
 
 (defn- inc-stat [p key]
   (alter p update key (fnil inc 0)))
 
 (defn view! [& _]
-  (let [rows (dosync
-               (cons {:id "--" :forks @forks}
-                     (map deref philosophers)))]
-    (pp-table [:id :forks :status] rows)))
-
-(defn view-summary! []
-  (let [ms (dosync (map deref philosophers))]
-    (pp-table [:id :forks :status :waited :feasted :tick] ms)))
+  (dosync
+    (let [rows (cons {:id "--" :forks @forks}
+                     (doall (map deref philosophers)))]
+      (pp-table [:id :forks :status :waited :max-wait :feasted :tick] rows))))
 
 ;; logic
 
 (defn both-forks? [p] (>= (count (:forks @p)) 2))
 
 ;(defn- low-fork [p] (:id @p))
+
 ;(defn- high-fork [p] (inc (mod (:id @p) n)))
 
 (defn- p-forks [p]
@@ -82,6 +76,8 @@
 
 (defmethod next-status! :finished [_ p]
   (when (both-forks? p)
+    (alter p update :max-wait #(max (or % 0) (:waited @p -1)))
+    (alter p dissoc :waited)
     (inc-stat p :feasted))
   (if (seq (:forks @p))
     (do (drop-fork! p)
@@ -93,15 +89,22 @@
   (let [next (next-status! (:status @p) p)]
     (alter p assoc :status next)))
 
-(defn runz []
+(defn lock-step []
   (dotimes [_ 100]
-    (doall (pmap #(dosync (tick! %))  philosophers))
-    #_(await print-agent)
-    (view!))
-  (view-summary!)
-  :done)
+    (pdoseq [p philosophers]
+      (dosync (tick! p)))
+    (view!)))
+
+(defn chaos []
+  (pdoseq [p (take (* n 100) (cycle philosophers))]
+    (Thread/sleep (rand 10))
+    (when (< (rand 10) 1)
+      (view!))
+    (dosync (tick! p)))
+  (view!))
 
 (comment
-  (runz)
+  (lock-step)
+  (chaos)
   (reset-agent))
 

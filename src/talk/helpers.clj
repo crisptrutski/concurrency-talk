@@ -28,3 +28,8 @@
 (defn reset-agent []
   (agent-error print-agent)
   (restart-agent print-agent nil))
+
+(defmacro pdoseq [binding & body]
+  `(let [ts# (for ~binding (Thread. ^Runnable #(do ~@body)))]
+     (run! #(.start %) ts#)
+     (run! #(.join %) ts#)))
