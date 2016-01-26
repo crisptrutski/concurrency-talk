@@ -4,50 +4,42 @@
 
 (def n 5)
 
-(def forks (ref (into (sorted-set) (map inc) (range n))))
+(def forks
+  (ref (into (sorted-set) (map inc) (range n))))
 
-(def philosophers (for [_ (range n)] (ref (sorted-set))))
+(def philosophers
+  (for [i (range n)]
+    (ref {:id (inc i)
+          :status :sleeping
+          :forks (sorted-set)})))
 
-;; Assign :id metadata to philosophers
-(doseq [[p i] (map vector philosophers (range))]
-  (alter-meta! p assoc :id (inc i)))
-
-;; Used for side effects in transactions (eg metadata, logging)
+;; Used for side effects in transactions
 (def a (agent nil))
-
-(defmacro do-agent [& body]
-  `(send a (fn [~'_] ~@body)))
-
-(defn inc-meta [p k]
-  (do-agent
-    (when-not (= :tick k) (ppp (:id (meta p)) k))
-    (alter-meta! p update k (fnil inc 0))))
 
 (defn roll-10? [max] (< (rand-int 10) max))
 
-(defn details [ref]
-  (let [m (meta ref)]
-    {:id (:id m "--")
-     :status (:status m "--")
-     :forks @ref}))
+(defn- inc-stat [p key]
+  (alter p update key (fnil inc 0)))
 
 (defn view! [& _]
-  (let [rows (dosync (map details (cons forks philosophers)))]
-    (send a (fn [_] (pp-table [:id :forks :status] rows)))))
+  (let [rows (dosync
+               (cons {:id "--" :forks @forks}
+                     (map deref philosophers)))]
+    (pp-table [:id :forks :status] rows)))
 
-(defn view-meta! []
-  (let [ms (dosync (map meta philosophers))]
-    (send a (fn [_] (pp-table [:id :status :waited :feasted :tick] ms)))))
+(defn view-summary! []
+  (let [ms (dosync (map deref philosophers))]
+    (pp-table [:id :forks :status :waited :feasted :tick] ms)))
 
 ;; logic
 
-(defn both-forks? [p] (>= (count @p) 2))
+(defn both-forks? [p] (>= (count (:forks @p)) 2))
 
-;(defn- low-fork [p] (:id (meta p)))
-;(defn- high-fork [p] (inc (mod (:id (meta p)) n)))
+;(defn- low-fork [p] (:id @p))
+;(defn- high-fork [p] (inc (mod (:id @p) n)))
 
 (defn- p-forks [p]
-  (let [id (:id (meta p))]
+  (let [id (:id @p)]
     [id (inc (mod id n))]))
 
 (defn- low-fork [p] (apply min (p-forks p)))
@@ -57,17 +49,19 @@
 (defn next-fork [p forks]
   (let [low (low-fork p)]
     (or (@forks low)
-        (and (@p low)
+        (and ((:forks @p) low)
              (high-fork p)))))
 
 (defn take-fork! [p f]
   (when (@forks f)
+    (ppp "take" (:id @p) f)
     (alter forks disj f)
-    (alter p conj f)))
+    (alter p update :forks #(conj % f))))
 
 (defn drop-fork! [p]
-  (when-let [f (first @p)]
-    (alter p #(disj % f))
+  (when-let [f (first (:forks @p))]
+    (ppp "drop" (:id @p) f)
+    (alter p update :forks #(disj % f))
     (alter forks conj f)))
 
 (defmulti next-status! (fn [state _] state))
@@ -80,7 +74,7 @@
     :eating
     (do (let [f (next-fork p forks)]
           (or (and f (take-fork! p f))
-              (inc-meta p :waited)))
+              (inc-stat p :waited)))
         :hungry)))
 
 (defmethod next-status! :eating [_ _]
@@ -88,26 +82,26 @@
 
 (defmethod next-status! :finished [_ p]
   (when (both-forks? p)
-    (inc-meta p :feasted))
-  (if (seq @p)
+    (inc-stat p :feasted))
+  (if (seq (:forks @p))
     (do (drop-fork! p)
         :finished)
     :thinking))
 
 (defn tick! [p]
-  (alter-meta! p update :status #(do (inc-meta p :tick)
-                                     (next-status! % p))))
+  (inc-stat p :tick)
+  (let [next (next-status! (:status @p) p)]
+    (alter p assoc :status next)))
 
 (defn runz []
   (dotimes [_ 100]
-    (doall (pmap #(do #_(do-agent (pp "<"))
-                      (dosync (tick! %))
-                      #_(do-agent (pp ">"))) philosophers))
-    (await a)
-    (view!)
-    (await a))
-  (view-meta!)
+    (doall (pmap #(dosync (tick! %))  philosophers))
+    #_(await print-agent)
+    (view!))
+  (view-summary!)
   :done)
 
 (comment
-  (runz))
+  (runz)
+  (reset-agent))
+
