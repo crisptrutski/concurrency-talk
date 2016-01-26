@@ -9,14 +9,14 @@
         m (rand-int 40)]
     (dosync
      (when (> @a m)
-       (p "<")
+       (pp "<")
        (alter a - m)
        (Thread/sleep (rand-int 2))
-       (p ">")
+       (pp ">")
        (commute b + m)))))
 
 (defn print-total []
-  (p (reduce + (map deref accounts))))
+  (pp (reduce + (map deref accounts))))
 
 (defn print-total-consistent []
   (dosync (print-total)))
