@@ -48,13 +48,13 @@
 
 (defn take-fork! [p f]
   (when (@forks f)
-    (ppp "take" (:id @p) f)
+    (ppp (str "p" (:id @p)) "takes" (str "f" f))
     (alter forks disj f)
     (alter p update :forks #(conj % f))))
 
 (defn drop-fork! [p]
   (when-let [f (first (:forks @p))]
-    (ppp "drop" (:id @p) f)
+    (ppp (str "p" (:id @p)) "drops" (str "f" f))
     (alter p update :forks #(disj % f))
     (alter forks conj f)))
 
@@ -96,9 +96,9 @@
     (view!)))
 
 (defn chaos []
-  (pdoseq [p (take (* n 100) (cycle philosophers))]
-    (Thread/sleep (rand 10))
-    (when (< (rand 10) 1)
+  (pdoseq [p (shuffle (take (* n 200) (cycle philosophers)))]
+    (Thread/sleep (rand (+ 10 n)))
+    (when (roll-10? 1)
       (view!))
     (dosync (tick! p)))
   (view!))
