@@ -18,9 +18,12 @@
 
 ;; delay
 
-(do
-  (def delays (for [i (range 5)] (delay (prn 'pop 'sqrt (* i i)) i)))
-  @(nth delays 2))
+(def delays
+  (for [i (range 5)]
+    (delay (prn 'pop 'sqrt (* i i))
+           i)))
+
+@(nth delays 2)
 
 ;; future
 
@@ -222,100 +225,86 @@
 
 ;; philosophers!
 
-(def forks)
-(def philosophers)
-
-(defn inverse [m] (into {} (map (juxt val key)) m))
-;; (inverse {:a 1 :b 2 :c 3 :d 1})
-;; => {1 :d, 2 :b, 3 :c}
-
-(defn setup! [n]
-  (alter-var-root #'philosophers (constantly n))
-  (alter-var-root #'forks (constantly (map #(ref {(inc %) nil}) (range (inc n))))))
-
-(setup! 5)
-
-(defn view! []
-  (let [fs (map deref forks)
-        grp (into (sorted-map) (map (fn [[k v]] [k (map key v)])) (group-by val (reduce merge fs)))]
-    (doseq [p (concat [nil] (range 1 (inc philosophers)))]
-      (println (or p "f") ":" (get grp p)))))
-
-(defn pick-up [p f]
-  (alter (nth forks (dec f))
-         (fn [x]
-           (if (get x f)
-             x
-             (assoc x f p)))))
-
-
-
-;;
-
-
-(def n 5)
-(def forks (ref (into (sorted-set) (map inc) (range (inc n)))))
-(def philosophers (map ref (repeat n nil)))
-
-(defn state? [p]
-  (:status (meta p)))
-
-(defn take-fork [p f]
-  (let [ok? (atom nil)]
-    (alter forks (fn [forks?]
-                   (reset! ok? (forks? f))
-                   (disj forks? f)))
-    (when @ok?
-      (alter p conj f))))
-
-(defn ready? [p]
-  (>= (count @p) 2))
-
-(defn take-forks [p]
-  (or (ready? p)
-      (let [fs (drop (count @p) @forks)]
-        (take-fork p (last fs)))))
-
-(defn drop-fork [p f]
-  (let [ok? (atom nil)]
-    (alter p
-           (fn [fs]
-             (reset! ok? (some #{f} fs))
-             (remove #{f} fs)))
-    (when @ok?
-      (alter forks conj f))))
-
-(defn drop-forks [p]
-  (doseq [f @p]
-    (drop-fork p f)))
-
-(defn view! []
-  (println "f" ":" @forks)
-  (doseq [[i p] (map vector (range) philosophers)]
-    (println (inc i) ":" @p (str "(" (name (or (state? p) :sleeping)) ")"))))
-
-
-(defn update-philosopher [p]
-  (alter-meta! p update :status
-               (fn [s]
-                 (case s
-                   :eating (if (< (rand-int 10) 4)
-                             (do (drop-forks p) :thinking)
-                             :eating)
-                   :hungry (do
-                             (take-forks p)
-                             (if (ready? p)
-                               :eating
-                               :hungry))
-                   (if (< (rand-int 10) 8)
-                     :thinking
-                     :hungry)))))
-
-
 
 (def a (agent nil))
 
-(dotimes [i 100]
-  (doall (pmap (fn [x] (dosync (update-philosopher x))) philosophers))
-  (view!)
+(let [o *out*]
+  (defn philo-meta! [p k f]
+    (send a (fn [_]
+              (binding [*out* o]
+                (prn (:id (meta p)) k))
+              (alter-meta! p update k f)))))
+
+(def n 5)
+(def forks (ref (into (sorted-set) (map inc) (range (inc n)))))
+(def philosophers (map #(alter-meta! %1 update :id (inc %2)) (repeatedly n #(ref nil)) (range)))
+
+(defn roll-10? [max] (< (rand-int 10) max))
+
+(defn state? [p] (:status (meta p) :sleeping))
+
+(defn ready? [p] (>= (count @p) 2))
+
+(defn enough? [p forks]
+  (>= (+ (count @p) (count @forks)) 2))
+
+(defn take-fork [p f]
+  (when (@forks f)
+    (alter forks disj f)
+    (commute p conj f)))
+
+(defn take-a-fork [p]
+  (or (ready? p)
+      (when (enough? p forks)
+        (take-fork p (last @forks)))))
+
+(defn drop-fork [p f]
+  (when (some #{f} @p)
+    (alter p #(remove #{f} %))
+    (commute forks conj f)))
+
+(defn drop-a-fork [p]
+  (doseq [f @p]
+    (drop-fork p f)))
+
+(let [o *out*]
+  (defn view! []
+    (binding [*out* o]
+      (println "f" ":" @forks)
+      (doseq [[i p] (map vector (range) philosophers)]
+        (println (inc i) ":" @p (str "(" (name (state? p)) ")"))))))
+
+(defmulti transition-philo (fn [state _] state))
+
+(defmethod transition-philo :default [_ _]
+  (if (roll-10? 8) :thinking :hungry))
+
+(defmethod transition-philo :hungry [_ p]
+  (if (ready? p)
+    :eating
+    (do (when-not (take-a-fork p)
+          (philo-meta! p :waited (fnil inc 0)))
+        :hungry)))
+
+(defmethod transition-philo :eating [_ _]
+  (if (roll-10? 8) :eating :finished))
+
+(defmethod transition-philo :finished [_ p]
+  (when (ready? p)
+    (philo-meta! p :eaten (fnil inc 0)))
+  (drop-a-fork p)
+  (if (seq @p) :finished :thinking))
+
+(defn update-philo [p]
+  (alter-meta! p update :status #(transition-philo % p)))
+
+(dotimes [_ 100]
+  (doall (pmap #(dosync (update-philo %)) philosophers))
+  (send a (fn [_] view!))
   (println "--"))
+
+(clojure.pprint/print-table
+  [:id :status :waited :eaten]
+  (map meta philosophers))
+
+

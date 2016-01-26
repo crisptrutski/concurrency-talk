@@ -1,4 +1,4 @@
 (set-env! :source-paths #{"src"})
 
-(task-options!
+#_(task-options!
   repl {:skip-init true})
