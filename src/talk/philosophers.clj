@@ -5,7 +5,7 @@
 (def n 5)
 
 (def forks
-  (ref (into (sorted-set) (map inc) (range n))))
+  (ref (into (sorted-set) (map inc) (range (* 2 n)))))
 
 (def philosophers
   (for [i (range n)]
