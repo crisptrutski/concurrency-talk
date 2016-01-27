@@ -2,6 +2,8 @@
   (:require
     [clojure.pprint :as pp]))
 
+(def push conj)
+
 (def print-agent (agent nil))
 
 (defmacro with-agent [& body]

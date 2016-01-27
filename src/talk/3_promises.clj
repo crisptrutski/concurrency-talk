@@ -48,7 +48,4 @@
   @f1 @f2 @f3
 
   ;; blocke in parallel
-  (prn (- (.getTime (Date.)) start)))
-
-
-
+  (println (- (.getTime (Date.)) start)))

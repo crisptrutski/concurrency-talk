@@ -1,6 +1,7 @@
 (ns talk.4_agent_algae
   (:require
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    [talk.helpers :refer :all]))
 
 (def state (agent "A"))
 
@@ -8,12 +9,10 @@
 
 (def expand #(str/escape % mapping))
 
-(defn mutate [n wait]
-  (dotimes [i n]
-    (future
-      (Thread/sleep (* i wait))
-      (send state expand))))
-
 (comment
-  (mutate 15 1200)
-  @state)
+  @state
+  ;; kick off the petri dish
+  (future
+    (dotimes [_ 13]
+      (Thread/sleep 1000)
+      (send state expand))))

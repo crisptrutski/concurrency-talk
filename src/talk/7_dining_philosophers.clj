@@ -88,9 +88,8 @@
 
 (comment
   (view!)
-  (do
-    (dosync (tick! (first philosophers)))
-    (view!))
+  (do (dosync (tick! (first philosophers)))
+      (view!))
   (tick-all!)
   (pdotimes 100 (tick-all!))
   (fully-parallel)

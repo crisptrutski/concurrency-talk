@@ -6,7 +6,7 @@
 ;; locks
 ;;;;;;;;
 
-;; any reference or object can be used as a lock (dynamic ftw)
+;; any reference or object can be used as a lock
 (def o (Object.))
 
 (defn wait-max
@@ -25,7 +25,7 @@
 (comment
   ;; overlapping
   (pdoseq [i (range 5)]
-    (wait-max 100)
+    (wait-max 99)
     (pick-lock i))
 
   ;; non overlapping
@@ -57,17 +57,12 @@
 ;;;;;;;;;;
 
 (defn compute-squares [n]
-  ;; [] to see actual parallelism
-  (let [xs (atom (sorted-set))
+  (let [xs (atom (sorted-set) #_[])
         latch (CountDownLatch. n)]
-    (doseq [i (range n) :let [j (inc i)]]
-      (.start
-        (Thread.
-          ^Runnable
-          (fn []
-            (Thread/sleep (rand-int 3))
-            (swap! xs conj (* j j))
-            (.countDown latch)))))
+    (pdoseq [i (range n) :let [j (inc i)]]
+      (Thread/sleep (rand-int 3))
+      (swap! xs conj (* j j))
+      (.countDown latch))
     (.await latch)
     @xs))
 
