@@ -28,3 +28,5 @@
     (locking o
       (pick-lock i))))
 
+
+;; rest of demos? cut!
