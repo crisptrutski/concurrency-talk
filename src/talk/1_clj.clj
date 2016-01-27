@@ -1,10 +1,12 @@
-(ns talk.-1_clj)
+(ns talk.-1_clj
+  (:require
+    [talk.helpers :refer :all]))
 
 ;; syntax
 
-(defn add "docstring" [a b] (+ a b))                        ;; default to prefix. { => (
-(defn div [{:keys [num denom]}] (/ num denom))              ;; destructuring
-(div {:num 14 :denom 2})                                    ;; f(10, 3), ( is on the outside
+(defn add "docstring" [a b] (+ a b))           ;; default to prefix. { => (
+(defn div [{:keys [num denom]}] (/ num denom)) ;; destructuring
+(div {:num 14 :denom 2})                       ;; f(10, 3), ( is on the outside
 
 ;; immutable
 
@@ -57,4 +59,8 @@
   (* i 9))
 
 (pmap compute-9-times-table (range 20))
+
+(comment
+  (pdotimes 50
+    (pp (rand))))
 
