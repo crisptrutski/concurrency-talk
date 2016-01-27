@@ -15,14 +15,11 @@
 
 (defn roll-10? [max] (< (rand-int 10) max))
 
-(defn- inc-stat [p key]
-  (alter p update key (fnil inc 0)))
-
 (defn view! [& _]
   (dosync
     (let [rows (cons {:id "--" :forks @forks}
                      (doall (map deref philosophers)))]
-      (pp-table [:id :forks :status :waited :max-wait :feasted :tick] rows))))
+      (pp-table [:id :forks :status] rows))))
 
 ;; logic
 
@@ -66,26 +63,20 @@
 (defmethod next-status! :hungry [_ p]
   (if (both-forks? p)
     :eating
-    (do (let [f (next-fork p forks)]
-          (or (and f (take-fork! p f))
-              (inc-stat p :waited)))
+    (do (when-let [f (next-fork p forks)]
+          (take-fork! p f))
         :hungry)))
 
 (defmethod next-status! :eating [_ _]
   (if (roll-10? 6) :eating :finished))
 
 (defmethod next-status! :finished [_ p]
-  (when (both-forks? p)
-    (alter p update :max-wait #(max (or % 0) (:waited @p -1)))
-    (alter p dissoc :waited)
-    (inc-stat p :feasted))
-  (if (seq (:forks @p))
+  (if (empty? (:forks @p))
+    :thinking
     (do (drop-fork! p)
-        :finished)
-    :thinking))
+        :finished)))
 
 (defn tick! [p]
-  (inc-stat p :tick)
   (let [next (next-status! (:status @p) p)]
     (alter p assoc :status next)))
 
