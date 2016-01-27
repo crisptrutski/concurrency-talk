@@ -1,20 +1,26 @@
+(ns talk.draf
+  (:require
+    [talk.helpers :refer :all])
+  (:import
+    (java.util Date)))
+
 ;; promise based abstraction
 
 ;; @ (read)
 
 (do
-   (def p (promise))
+  (def p (promise))
 
-   (.start
-      (Thread.
-       (fn []
-         (println "Run..")
-         (println (str "Read: " @p))
-         (println "Done.."))))
-
-   (println "Delivering...")
-   (Thread/sleep 100)
-   (deliver p 1))
+  (.start
+    (Thread.
+      ^Runnable
+      (fn []
+        (println "Reading...")
+        (println (str "Read: " @p))
+        (println "Done."))))
+  (Thread/sleep 100)
+  (println "Delivering...")
+  (deliver p 1))
 
 ;; delay
 
@@ -28,17 +34,17 @@
 ;; future
 
 (do
-  (def f1 (future (Thread/sleep 2000)))
-  (def f2 (future (Thread/sleep 3000)))
-  (def f3 (future (Thread/sleep 1000)))
+  (def f1 (future (Thread/sleep 200)))
+  (def f2 (future (Thread/sleep 300)))
+  (def f3 (future (Thread/sleep 100)))
 
-  (def start (.getTime (java.util.Date.)))
+  (def start (.getTime (Date.)))
 
   @f1
   @f2
   @f3
 
-  (prn (- (.getTime (java.util.Date.)) start)))
+  (prn (- (.getTime (Date.)) start)))
 
 ;; show locks
 
@@ -58,29 +64,23 @@
       (println (str (inc n) " has given up..."))
       (println "-----"))))
 
+(pdoseq [i (range 5)] (lock-picker i))
+
 ;; show it's re-entrant
 
-(defn -lock-step [n]
+(defn -step [n]
   (when (pos? n)
     (locking o
       (prn n)
-      (-lock-step (dec n)))))
+      (-step (dec n)))))
 
 (defn lock-step [n]
-  (future
-    (wait-max 100)
-    (locking o
-      (-lock-step (inc n))
-      (println "-----"))))
+  (wait-max 100)
+  (locking o
+    (-step (inc n))
+    (println "-----")))
 
-(map deref
-     (for [i (range 5)]
-       (lock-picker i)))
-
-(println "\n======\n")
-
-(dotimes [i 5]
-  (lock-step i))
+(pdoseq [i (range 5)] (lock-step i))
 
 ;; parallelism
 
@@ -90,15 +90,10 @@
 (pmap (fn [x] (Thread/sleep 100) (* x x)) (range 50))
 ;; not 5 seconds
 
-(def a (agent nil))
 
-(defn sync-prn [& args]
-  (send-off a (fn [_] (apply prn args))))
 
 ;; straight up parallelism
-(run! #(future (Thread/sleep 100) (sync-prn (* % %))) (range 50))
-
-
+(run! #(future (Thread/sleep 100) (ppp (* % %))) (range 50))
 
 
 ;; atoms [from ML, 1973]
@@ -118,10 +113,13 @@
 
 (def cnt (atom 0))
 (doall (pmap (fn [x] (reset! cnt (+ x @cnt))) (range 50)))
-@cnt ;; probably not 1225
+;; probably not 1225
+@cnt
+
 (reset! cnt 0)
 (doall (pmap (fn [x] (swap! cnt + x)) (range 50)))
-@cnt ;; 1225
+;; 1225
+@cnt
 
 
 ;; atoms + concurrency + immutable data
@@ -143,42 +141,21 @@
 (pmap #(swap! x conj %) (range 9))
 ;; randomised order
 
-(def x (atom 10))
-(def y (atom 0))
 
-;; pyramid = 55
-
-(pmap (fn [_] (swap! y + @x) (swap! x dec)) (range @x))
-;; yay.. broken
-
-(prn @x ":" @y)
-
-(pmap (fn [_] (swap! y + (inc (swap! x dec)))) (range @x))
-;; damn.. still works
-
-(prn @x ":" @y)
-
-
-(def x (ref 10))
-(def y (ref 0))
-
-(pmap (fn [_] (dosync (alter y + @x) (alter x dec))) (range @x))
-;; works
-
-
-
-;; example that's better i think
+;; Mutually consuming queues
 
 (def x (atom (range 6)))
 (def y (atom [\a \b \c \d \e \f]))
 
-(defn first-to-last [i]
+(defn first-to-last [_]
   (let [[x1 & xs] @x
         [y1 & ys] @y]
     (reset! x (conj (vec xs) y1))
     (reset! y (conj (vec ys) x1))))
 
 (pmap first-to-last (range 6))
+
+[@x @y]
 
 ;; [5 \a \b \d \e \f]
 ;; [0 1 2 2 3 4]
