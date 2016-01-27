@@ -28,23 +28,9 @@
 
 (defn both-forks? [p] (>= (count (:forks @p)) 2))
 
-;(defn- low-fork [p] (:id @p))
+(defn- low-fork [p] (:id @p))
 
-;(defn- high-fork [p] (inc (mod (:id @p) n)))
-
-(defn- p-forks [p]
-  (let [id (:id @p)]
-    [id (inc (mod id n))]))
-
-(defn- low-fork [p] (apply min (p-forks p)))
-
-(defn- high-fork [p] (apply max (p-forks p)))
-
-(defn next-fork [p forks]
-  (let [low (low-fork p)]
-    (or (@forks low)
-        (and ((:forks @p) low)
-             (high-fork p)))))
+(defn- high-fork [p] (inc (mod (:id @p) n)))
 
 (defn take-fork! [p f]
   (when (@forks f)
@@ -60,19 +46,21 @@
 
 (defmulti next-status! (fn [state _] state))
 
-(defmethod next-status! :default [_ _]
-  (if (roll-10? 8) :thinking :hungry))
+(defmethod next-status! :default [_ p]
+  (if (roll-10? 8) :thinking (next-status! :hungry p)))
 
 (defmethod next-status! :hungry [_ p]
   (if (both-forks? p)
     :eating
-    (do (let [f (next-fork p forks)]
-          (or (and f (take-fork! p f))
-              (inc-stat p :waited)))
-        :hungry)))
+    (do (or (and (take-fork! p (low-fork p))
+                 (take-fork! p (high-fork p))
+                 (next-status! :hungry p))
+            (do (drop-fork! p)
+                (inc-stat p :waited)
+                :hungry)))))
 
-(defmethod next-status! :eating [_ _]
-  (if (roll-10? 6) :eating :finished))
+(defmethod next-status! :eating [_ p]
+  (if (roll-10? 6) :eating (next-status! :finished p)))
 
 (defmethod next-status! :finished [_ p]
   (when (both-forks? p)
@@ -81,7 +69,8 @@
     (inc-stat p :feasted))
   (if (seq (:forks @p))
     (do (drop-fork! p)
-        :finished)
+        (drop-fork! p)
+        (next-status! :finished p))
     :thinking))
 
 (defn tick! [p]
