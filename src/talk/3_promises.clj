@@ -1,8 +1,11 @@
 (ns talk.3-promises
   (:require
-    [talk.helpers :refer :all])
+    [talk.helpers :refer :all]
+    [clojure.string :as str])
   (:import
     (java.util Date)))
+
+;; async reads
 
 ;; ** promise: blockable container (can also use monad style)
 
@@ -49,3 +52,21 @@
 
   ;; blocke in parallel
   (println (- (.getTime (Date.)) start)))
+
+
+;; ** agents (async write)
+
+(def state (agent "A"))
+
+(def mapping {\A "AB" \B "A"})
+
+(defn expand [s]
+  (Thread/sleep 1000)
+  (str/escape s mapping))
+
+(comment
+  @state
+  ;; kick off the petri dish
+  (dotimes [_ 12]
+    (send state expand)))
+

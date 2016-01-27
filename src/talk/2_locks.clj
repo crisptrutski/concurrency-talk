@@ -1,18 +1,12 @@
 (ns talk.2-locks
   (:require
-    [talk.helpers :refer :all])
-  (:import java.util.concurrent.CountDownLatch))
+    [talk.helpers :refer :all]))
 
 ;; locks
 ;;;;;;;;
 
 ;; any reference or object can be used as a lock
 (def o (Object.))
-
-(defn wait-max
-  "Wait from 0 to `max-ms` milliseconds"
-  [max-ms]
-  (Thread/sleep (rand max-ms)))
 
 ;; Demo 1: basic lock
 
@@ -33,41 +27,4 @@
     (wait-max 100)
     (locking o
       (pick-lock i))))
-
-;; Demo 2: re-entrant
-
-(defn -step [n]
-  (when (pos? n)
-    (locking o
-      (prn n)
-      (-step (dec n)))))
-
-(defn lock-step [n]
-  (wait-max 100)
-  (locking o
-    (-step (inc n))
-    (println "-----")))
-
-(comment
-  ;; non-overlapping, can re-lock
-  (pdoseq [i (range 4)] (lock-step i)))
-
-
-;; latches
-;;;;;;;;;;
-
-(defn compute-squares [n]
-  (let [xs (atom (sorted-set) #_[])
-        latch (CountDownLatch. n)]
-    (pdoseq [i (range n) :let [j (inc i)]]
-      (Thread/sleep (rand-int 3))
-      (swap! xs conj (* j j))
-      (.countDown latch))
-    (.await latch)
-    @xs))
-
-(comment
-  (compute-squares 20)
-  (dotimes [_ 5]
-    (prn (compute-squares 20))))
 

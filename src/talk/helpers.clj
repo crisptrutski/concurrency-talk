@@ -2,6 +2,11 @@
   (:require
     [clojure.pprint :as pp]))
 
+(defn wait-max
+  "Wait from 0 to `max-ms` milliseconds"
+  [max-ms]
+  (Thread/sleep (rand max-ms)))
+
 (def push conj)
 
 (def print-agent (agent nil))

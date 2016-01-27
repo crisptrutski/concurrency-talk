@@ -4,19 +4,19 @@
 
 ;; atoms
 
-(def users (atom [{:name "predecessor"}]))
-@users
-(reset! users [])
-(swap! users push {:name "firstone"})
-(swap! users push {:name "successor"})
+(def nums (atom []))
+@nums
+(reset! nums [0])
+(swap! nums push (rand))
 
 ;; atoms with concurrency
 
-(reduce + (range 50))
 
 (let [cnt (atom 0)]
+  ;; exact
+  #_(reset! cnt (reduce + (range 50)))
   ;; naive
-  (doall (pmap (fn [x] (reset! cnt (+ x @cnt))) (range 50)))
+  #_(doall (pmap (fn [x] (reset! cnt (+ x @cnt))) (range 50)))
   ;; atomic
   #_(doall (pmap (fn [x] (swap! cnt + x)) (range 50)))
   @cnt)
