@@ -28,10 +28,6 @@
 
 (defn both-forks? [p] (>= (count (:forks @p)) 2))
 
-(defn- low-fork [p] (:id @p))
-
-(defn- high-fork [p] (inc (mod (:id @p) n)))
-
 (defn take-fork! [p f]
   (when (@forks f)
     (ppp (str "p" (:id @p)) "takes" (str "f" f))
@@ -52,8 +48,8 @@
 (defmethod next-status! :hungry [_ p]
   (if (both-forks? p)
     :eating
-    (do (or (and (take-fork! p (low-fork p))
-                 (take-fork! p (high-fork p))
+    (do (or (and (take-fork! p (first @forks))
+                 (take-fork! p (first @forks))
                  (next-status! :hungry p))
             (do (drop-fork! p)
                 (inc-stat p :waited)
