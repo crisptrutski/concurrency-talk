@@ -5,7 +5,7 @@
 (def n 5)
 
 (def forks
-  (ref (into (sorted-set) (map inc) (range (* 2 n)))))
+  (ref (into (sorted-set) (map inc) (range n))))
 
 (def philosophers
   (for [i (range n)]
@@ -19,14 +19,18 @@
   (alter p update key (fnil inc 0)))
 
 (defn view! [& _]
-  (dosync
-    (let [rows (cons {:id "--" :forks @forks}
-                     (doall (map deref philosophers)))]
-      (pp-table [:id :forks :status :waited :max-wait :feasted :tick] rows))))
+  (let [rows (dosync (cons {:id "--" :forks @forks} (doall (map deref philosophers))))]
+    (pp-table [:id :forks :status :waited :max-wait :feasted :tick] rows)))
 
 ;; logic
 
 (defn both-forks? [p] (>= (count (:forks @p)) 2))
+
+(defn p-forks [p] [(:id @p) (inc (mod (:id @p) n))])
+
+(defn next-fork [p]
+  (let [[a b] (sort (p-forks p))]
+    (if ((:forks @p) a) b a)))
 
 (defn take-fork! [p f]
   (when (@forks f)
@@ -43,20 +47,17 @@
 (defmulti next-status! (fn [state _] state))
 
 (defmethod next-status! :default [_ p]
-  (if (roll-10? 8) :thinking (next-status! :hungry p)))
+  (if (roll-10? 8) :thinking :hungry))
 
 (defmethod next-status! :hungry [_ p]
   (if (both-forks? p)
     :eating
-    (do (or (and (take-fork! p (first @forks))
-                 (take-fork! p (first @forks))
-                 (next-status! :hungry p))
-            (do (drop-fork! p)
-                (inc-stat p :waited)
-                :hungry)))))
+    (do (when-not (take-fork! p (@forks (next-fork p)))
+          (inc-stat p :waited))
+        :hungry)))
 
 (defmethod next-status! :eating [_ p]
-  (if (roll-10? 6) :eating (next-status! :finished p)))
+  (if (roll-10? 6) :eating :finished))
 
 (defmethod next-status! :finished [_ p]
   (when (both-forks? p)
@@ -64,23 +65,20 @@
     (alter p dissoc :waited)
     (inc-stat p :feasted))
   (if (seq (:forks @p))
-    (do (drop-fork! p)
-        (drop-fork! p)
-        (next-status! :finished p))
-    :thinking))
+    (do (drop-fork! p) :finished)
+    :sleeping))
 
 (defn tick! [p]
   (inc-stat p :tick)
   (let [next (next-status! (:status @p) p)]
     (alter p assoc :status next)))
 
-(defn lock-step []
-  (dotimes [_ 100]
-    (pdoseq [p philosophers]
-      (dosync (tick! p)))
+(defn tick-all! []
+  (pdoseq [p philosophers]
+    (dosync (tick! p))
     (view!)))
 
-(defn chaos []
+(defn fully-parallel []
   (pdoseq [p (shuffle (take (* n 200) (cycle philosophers)))]
     (Thread/sleep (rand (+ 10 n)))
     (when (roll-10? 1)
@@ -89,7 +87,12 @@
   (view!))
 
 (comment
-  (lock-step)
-  (chaos)
+  (view!)
+  (do
+    (dosync (tick! (first philosophers)))
+    (view!))
+  (tick-all!)
+  (pdotimes 100 (tick-all!))
+  (fully-parallel)
   (reset-agent))
 
