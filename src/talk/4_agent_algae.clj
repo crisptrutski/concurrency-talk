@@ -1,4 +1,4 @@
-(ns talk.algae
+(ns talk.4_agent_algae
   (:require
     [clojure.string :as str]))
 
@@ -13,11 +13,6 @@
     (future
       (Thread/sleep (* i wait))
       (send state expand))))
-
-(defn monitor []
-  (while true
-    (Thread/sleep 700)
-    (println @state)))
 
 (comment
   (mutate 15 1200)

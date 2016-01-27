@@ -1,7 +1,16 @@
-(ns talk.words
+(ns talk.bonus-fork-join
   (:require
     [clojure.core.reducers :as r]
     [clojure.string :as str]))
+
+;; some data
+
+(def w
+  (shuffle
+    (mapcat (partial repeat 20)
+            (str/split (slurp "lorem.txt") #"\s+"))))
+
+;; boilerplate, note empty arity (seeds)
 
 (defn count-words
   ([] {})
@@ -12,8 +21,7 @@
   ([] {})
   ([& m] (apply merge-with + m)))
 
-(defn words [text]
-  (str/split text #"\s+"))
+;; the meat:
 
 (defn word-frequency [words]
   (reduce count-words {} words))
@@ -21,9 +29,9 @@
 (defn word-frequency-multi [words]
   (r/fold merge-counts count-words words))
 
-(def w (shuffle (mapcat #(repeat 20 %) (words (slurp "lorem.txt")))))
 
-(time (word-frequency w))
-
-(time (word-frequency-multi w))
-
+(comment
+  ;; sequential
+  (take 10 (sort (time (word-frequency w))))
+  ;; parallel
+  (take 10 (sort (time (word-frequency-multi w)))))

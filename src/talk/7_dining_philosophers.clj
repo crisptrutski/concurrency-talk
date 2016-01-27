@@ -1,4 +1,4 @@
-(ns talk.philosophers
+(ns talk.7-dining-philosophers
   (:require
     [talk.helpers :refer :all]))
 
