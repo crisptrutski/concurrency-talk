@@ -19,8 +19,9 @@
   (alter p update key (fnil inc 0)))
 
 (defn view! [& _]
-  (let [rows (dosync (cons {:id "--" :forks @forks} (doall (map deref philosophers))))]
-    (pp-table [:id :forks :status :waited :max-wait :feasted :tick] rows)))
+  (dosync
+    (let [rows (cons {:id "--" :forks @forks} (doall (map deref philosophers)))]
+      (pp-table [:id :forks :status :waited :max-wait :feasted :tick] rows))))
 
 ;; logic
 
